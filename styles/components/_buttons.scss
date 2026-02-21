@@ -1,0 +1,28 @@
+// ------------------------------------------------------------
+// _buttons.scss
+// ------------------------------------------------------------
+
+button {
+  border: 1px solid $ui-lila-border;
+  background: $ui-lila;  // ✅ lila UI
+  color: $text;
+  padding: 8px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform 0.05s ease, background 0.15s ease, border 0.15s ease;
+}
+
+button:hover {
+  background: $ui-lila-dark;   // ✅ hover lila
+  border-color: $ui-lila-dark;
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+button:focus {
+  outline: none;
+  box-shadow: $focus;
+}

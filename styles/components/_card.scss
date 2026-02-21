@@ -1,0 +1,12 @@
+// ------------------------------------------------------------
+// _card.scss
+// ------------------------------------------------------------
+
+.card {
+  background: $card-mint;   // ✅ mint statt weiß
+  border: 1px solid $mint-border;
+  border-radius: $radius;
+  box-shadow: $shadow;
+  padding: 16px;
+  margin: 14px 0;
+}

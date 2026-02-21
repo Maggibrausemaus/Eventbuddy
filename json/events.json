@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1,
+    "title": "Scoutry App Design Session",
+    "dateTime": "2026-03-05T17:00",
+    "location": "FH Hagenberg – Lernraum",
+    "description": "Wireframes überarbeiten, Farbpalette fixieren und Icons anpassen.",
+    "status": "geplant",
+    "tagIds": [1, 2],
+    "participantIds": [1]
+  },
+  {
+    "id": 2,
+    "title": "Portfolio Logo finalisieren",
+    "dateTime": "2026-03-07T14:00",
+    "location": "Zuhause",
+    "description": "Band-Logo fertigstellen und Varianten exportieren.",
+    "status": "offen",
+    "tagIds": [2],
+    "participantIds": [1, 2]
+  },
+  {
+    "id": 3,
+    "title": "EventBuddy Abgabe-Check",
+    "dateTime": "2026-03-12T10:00",
+    "location": "Online-Call",
+    "description": "Letzte Bugs prüfen, Styling fixen, JSON testen.",
+    "status": "geplant",
+    "tagIds": [3],
+    "participantIds": [1]
+  },
+  {
+    "id": 4,
+    "title": "Stardew Wiki Update",
+    "dateTime": "2026-03-15T19:00",
+    "location": "Zuhause",
+    "description": "Neue Pflanzenkarten hinzufügen und Layout anpassen.",
+    "status": "offen",
+    "tagIds": [1],
+    "participantIds": [2]
+  }
+]
