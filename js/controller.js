@@ -6,7 +6,7 @@
 // - Events (Liste/Detail/Filter, Bearbeiten, Löschen, Teilnehmer speichern)
 // - Event erstellen / bearbeiten
 // - Teilnehmer
-// - Tags
+// - Tags (Add/Delete + Bearbeiten über updateTag)
 // --------------------------------------------------------------------
 
 import { renderBannerView } from "./view/bannerView.js";
@@ -39,13 +39,13 @@ export function Controller(eventModel, participantModel, tagModel) {
 }
 
 // --------------------------------------------------------------------
-// Model Listener
+// Model Listener (EventTarget-basiert)
 // --------------------------------------------------------------------
 Controller.prototype._wire = function (model) {
-    model.addListener("loaded", () => this.render());
-    model.addListener("changed", () => this.render());
-    model.addListener("banner", (text) => {
-        this.bannerText = text;
+    model.addEventListener("loaded", () => this.render());
+    model.addEventListener("changed", () => this.render());
+    model.addEventListener("banner", (e) => {
+        this.bannerText = e.detail || "";
         this.render();
     });
 };
@@ -119,7 +119,7 @@ Controller.prototype.render = function () {
                 if (ok) this.eventModel.deleteEvent(id);
             },
 
-            // Teilnehmer im Detail speichern
+            // Teilnehmer speichern
             (eventId, participantIds) => {
                 this.eventModel.updateParticipants(eventId, participantIds);
             }
@@ -140,6 +140,7 @@ Controller.prototype.render = function () {
         bindEventFormView(
             content,
 
+            // Submit
             (formData) => {
                 if (formData.id) {
                     this.eventModel.updateEvent(formData);
@@ -152,6 +153,7 @@ Controller.prototype.render = function () {
                 this.render();
             },
 
+            // Cancel Edit
             () => {
                 this.editEvent = null;
                 this.activePage = "events";
@@ -236,6 +238,12 @@ Controller.prototype.render = function () {
 
                 const ok = confirm("Tag wirklich löschen?");
                 if (ok) this.tagModel.deleteTag(tid);
+            },
+
+            // Update (NEU)
+            (data) => {
+                // data = { id, label }
+                this.tagModel.updateTag(data);
             }
         );
     }

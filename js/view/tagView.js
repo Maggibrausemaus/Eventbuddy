@@ -3,26 +3,22 @@
 // Seite "Tags":
 // - Formular: neues Tag anlegen (Pflichtfeld *)
 // - Liste: alle Tags anzeigen
-// - Aktion: Tag löschen
+// - Aktionen: Tag bearbeiten / löschen
 //
 // Web Component + ShadowRoot
-// - lädt globales CSS in den ShadowRoot (damit SCSS/CSS wirkt)
+// - lädt globales CSS in den ShadowRoot
 // --------------------------------------------------------------------
 
 function clearContainer(container) {
     while (container.firstChild) container.removeChild(container.firstChild);
 }
 
-// ------------------------------------------------------------
-// <tag-view> Web Component
-// ------------------------------------------------------------
 export class TagView extends HTMLElement {
     constructor() {
         super();
 
         this.attachShadow({ mode: "open" });
 
-        // Globales CSS im Shadow DOM verfügbar machen
         const link = document.createElement("link");
         link.rel = "stylesheet";
         link.href = "./styles/main.css";
@@ -32,6 +28,9 @@ export class TagView extends HTMLElement {
         this.shadowRoot.appendChild(this.root);
 
         this._data = { tags: [] };
+
+        // Merker: welches Tag gerade bearbeitet wird
+        this._editingId = null;
     }
 
     setData(data) {
@@ -55,7 +54,7 @@ export class TagView extends HTMLElement {
         card.appendChild(h);
 
         // -----------------------------
-        // Formular
+        // Formular: Neues Tag
         // -----------------------------
         const form = document.createElement("form");
         form.id = "tagForm";
@@ -84,13 +83,10 @@ export class TagView extends HTMLElement {
         btn.textContent = "Tag hinzufügen";
         form.appendChild(btn);
 
-        // Submit -> nach außen melden
         form.addEventListener("submit", (e) => {
             e.preventDefault();
 
-            const payload = {
-                label: String(input.value || "").trim()
-            };
+            const payload = { label: String(input.value || "").trim() };
 
             this.dispatchEvent(
                 new CustomEvent("add-tag", {
@@ -122,26 +118,116 @@ export class TagView extends HTMLElement {
                 const li = document.createElement("li");
                 li.setAttribute("data-tag-id", t.id);
 
-                const span = document.createElement("span");
-                span.textContent = String(t.label || "");
-                li.appendChild(span);
+                // Linke Seite: Anzeige ODER Edit-Input
+                if (Number(this._editingId) === Number(t.id)) {
+                    // Edit-Modus
+                    const editWrap = document.createElement("div");
+                    editWrap.className = "tag-edit";
 
-                const del = document.createElement("button");
-                del.type = "button";
-                del.textContent = "Löschen";
-                del.className = "btn-tag-delete";
+                    const editInput = document.createElement("input");
+                    editInput.type = "text";
+                    editInput.value = String(t.label || "");
+                    editInput.className = "tag-edit__input";
+                    editWrap.appendChild(editInput);
 
-                del.addEventListener("click", () => {
-                    this.dispatchEvent(
-                        new CustomEvent("delete-tag", {
-                            detail: { id: t.id },
-                            bubbles: true,
-                            composed: true
-                        })
-                    );
-                });
+                    li.appendChild(editWrap);
 
-                li.appendChild(del);
+                    // Buttons: Speichern / Abbrechen / Löschen (optional)
+                    const actions = document.createElement("div");
+                    actions.className = "tag-actions";
+
+                    const save = document.createElement("button");
+                    save.type = "button";
+                    save.textContent = "Speichern";
+                    save.className = "btn-tag-save";
+
+                    save.addEventListener("click", () => {
+                        const newLabel = String(editInput.value || "").trim();
+
+                        this.dispatchEvent(
+                            new CustomEvent("update-tag", {
+                                detail: { id: t.id, label: newLabel },
+                                bubbles: true,
+                                composed: true
+                            })
+                        );
+
+                        this._editingId = null;
+                        // UI wird ohnehin durch Model "changed" neu gerendert,
+                        // aber fürs direkte Feedback rendern wir zusätzlich:
+                        this.render();
+                    });
+
+                    const cancel = document.createElement("button");
+                    cancel.type = "button";
+                    cancel.textContent = "Abbrechen";
+                    cancel.className = "btn-tag-cancel";
+
+                    cancel.addEventListener("click", () => {
+                        this._editingId = null;
+                        this.render();
+                    });
+
+                    const del = document.createElement("button");
+                    del.type = "button";
+                    del.textContent = "Löschen";
+                    del.className = "btn-tag-delete";
+
+                    del.addEventListener("click", () => {
+                        this.dispatchEvent(
+                            new CustomEvent("delete-tag", {
+                                detail: { id: t.id },
+                                bubbles: true,
+                                composed: true
+                            })
+                        );
+                    });
+
+                    actions.appendChild(save);
+                    actions.appendChild(cancel);
+                    actions.appendChild(del);
+
+                    li.appendChild(actions);
+                } else {
+                    // Normal-Modus
+                    const span = document.createElement("span");
+                    span.textContent = String(t.label || "");
+                    li.appendChild(span);
+
+                    const actions = document.createElement("div");
+                    actions.className = "tag-actions";
+
+                    const edit = document.createElement("button");
+                    edit.type = "button";
+                    edit.textContent = "Bearbeiten";
+                    edit.className = "btn-tag-edit";
+
+                    edit.addEventListener("click", () => {
+                        this._editingId = t.id;
+                        this.render();
+                    });
+
+                    const del = document.createElement("button");
+                    del.type = "button";
+                    del.textContent = "Löschen";
+                    del.className = "btn-tag-delete";
+
+                    del.addEventListener("click", () => {
+                        this.dispatchEvent(
+                            new CustomEvent("delete-tag", {
+                                detail: { id: t.id },
+                                bubbles: true,
+                                composed: true
+                            })
+                        );
+                    });
+
+                    actions.appendChild(edit);
+                    actions.appendChild(del);
+
+                    li.appendChild(actions);
+                }
+
                 ul.appendChild(li);
             }
         }
@@ -157,7 +243,7 @@ if (!customElements.get("tag-view")) {
 }
 
 // ------------------------------------------------------------
-// Helfer-Funktionen: wie bisher im Controller verwendbar
+// Helfer-Funktionen wie bisher für den Controller
 // ------------------------------------------------------------
 export function renderTagView(container, data) {
     clearContainer(container);
@@ -168,7 +254,7 @@ export function renderTagView(container, data) {
     el.setData(data);
 }
 
-export function bindTagView(container, onAddTag, onDeleteTag) {
+export function bindTagView(container, onAddTag, onDeleteTag, onUpdateTag) {
     const el = container.querySelector("tag-view");
     if (!el) return;
 
@@ -179,5 +265,9 @@ export function bindTagView(container, onAddTag, onDeleteTag) {
     el.addEventListener("delete-tag", (e) => {
         const id = e.detail ? e.detail.id : null;
         if (onDeleteTag) onDeleteTag(id);
+    });
+
+    el.addEventListener("update-tag", (e) => {
+        if (onUpdateTag) onUpdateTag(e.detail);
     });
 }
