@@ -1,40 +1,62 @@
 // --------------------------------------------------------------------
 // bannerView.js
-//
-// Diese View zeigt kurze Hinweis- oder Fehlermeldungen an.
-// Beispiele:
-// - "Event erstellt."
-// - "Fehler beim Laden."
+// Hinweisleiste für kurze Meldungen
+// - Web Component + ShadowRoot
+// - lädt globales CSS in den ShadowRoot (damit SCSS/CSS wirkt)
 // --------------------------------------------------------------------
 
-// Hilfsfunktion:
-// Entfernt alle vorhandenen Elemente aus dem Container.
-// So wird vor jeder neuen Meldung alles geleert.
 function clearContainer(container) {
-    while (container.firstChild)
-        container.removeChild(container.firstChild);
+    while (container.firstChild) container.removeChild(container.firstChild);
 }
 
-// Rendert eine Banner-Meldung in den angegebenen Container.
-// container = DOM-Element (z.B. div#banner)
-// text = Meldungstext
+export class BannerView extends HTMLElement {
+    constructor() {
+        super();
+
+        this.attachShadow({ mode: "open" });
+
+        // Globales CSS im Shadow DOM verfügbar machen
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = "./styles/main.css";
+        this.shadowRoot.appendChild(link);
+
+        this.root = document.createElement("div");
+        this.shadowRoot.appendChild(this.root);
+
+        this.text = "";
+    }
+
+    setText(text) {
+        this.text = String(text || "");
+        this.render();
+    }
+
+    render() {
+        clearContainer(this.root);
+
+        if (!this.text || this.text.trim().length === 0) return;
+
+        const wrap = document.createElement("div");
+        wrap.className = "banner";
+
+        const p = document.createElement("p");
+        p.textContent = this.text;
+
+        wrap.appendChild(p);
+        this.root.appendChild(wrap);
+    }
+}
+
+if (!customElements.get("banner-view")) {
+    customElements.define("banner-view", BannerView);
+}
+
 export function renderBannerView(container, text) {
-    // Erst alten Inhalt entfernen
     clearContainer(container);
 
-    // Wenn kein Text vorhanden ist → nichts anzeigen
-    if (!text) return;
+    const el = document.createElement("banner-view");
+    container.appendChild(el);
 
-    // Wrapper-Div für Styling
-    const wrap = document.createElement("div");
-    wrap.className = "banner";
-
-    // Text-Element erzeugen
-    const p = document.createElement("p");
-    p.textContent = String(text || "");
-
-    wrap.appendChild(p);
-
-    // Banner in den Container einfügen
-    container.appendChild(wrap);
+    el.setText(text);
 }

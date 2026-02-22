@@ -1,9 +1,10 @@
 // --------------------------------------------------------------------
 // main.js
-// Einstiegspunkt:
-// - Modelle erstellen
+//
+// Einstiegspunkt der App:
+// - Models erstellen
 // - Controller erstellen
-// - JSON laden
+// - JSON-Daten laden
 // --------------------------------------------------------------------
 
 import { EventModel } from "./model/eventModel.js";

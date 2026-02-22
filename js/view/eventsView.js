@@ -1,225 +1,297 @@
 // --------------------------------------------------------------------
 // eventsView.js
-//
-// View für die Events-Seite:
-// - Filter (Status, Teilnehmer, Tag)
-// - Liste der Events (klickbar)
-// - Detailbereich zum ausgewählten Event
+// Seite "Events":
+// - Filter oben (Status, Teilnehmer, Tag)
+// - Eventliste (Auswahl per Klick)
+// - Detailbereich
 // - Aktionen: Bearbeiten / Löschen
-// - Detail: Teilnehmer direkt ändern (Dropdown + Speichern)
+// - Detail: Teilnehmer ändern + speichern
 //
-// Rendern baut alles neu auf, bindEventsView verknüpft nur Events
-// mit Callbacks aus dem Controller.
+// Web Component + ShadowRoot
+// - lädt globales CSS in den ShadowRoot (damit SCSS/CSS wirkt)
 // --------------------------------------------------------------------
 
 function clearContainer(container) {
     while (container.firstChild) container.removeChild(container.firstChild);
 }
 
-// --------------------------------------------------------------------
-// renderEventsView(container, data)
-//
-// Baut die Seite neu auf.
-// data enthält: filters, tags, participants, events, selected.
-// Die ausgewählte Event-ID wird zusätzlich als data-selected-event-id
-// im Container gespeichert (für spätere Klick-Handler).
-// --------------------------------------------------------------------
+// ------------------------------------------------------------
+// <events-view> Web Component
+// ------------------------------------------------------------
+export class EventsView extends HTMLElement {
+    constructor() {
+        super();
+
+        this.attachShadow({ mode: "open" });
+
+        // Globales CSS im Shadow DOM verfügbar machen
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = "./styles/main.css";
+        this.shadowRoot.appendChild(link);
+
+        this.root = document.createElement("div");
+        this.shadowRoot.appendChild(this.root);
+
+        this._data = {
+            filters: {},
+            tags: [],
+            participants: [],
+            events: [],
+            selected: null
+        };
+    }
+
+    setData(data) {
+        this._data = data || this._data;
+        this.render();
+    }
+
+    render() {
+        clearContainer(this.root);
+
+        const data = this._data || {};
+        const filters = data.filters || {};
+        const tags = data.tags || [];
+        const participants = data.participants || [];
+        const events = data.events || [];
+        const selected = data.selected || null;
+
+        // ausgewählte Event-ID am Element merken (für "Teilnehmer speichern")
+        if (selected && selected.id !== undefined && selected.id !== null) {
+            this.setAttribute("data-selected-event-id", String(selected.id));
+        } else {
+            this.removeAttribute("data-selected-event-id");
+        }
+
+        const page = document.createElement("div");
+        page.className = "events-page";
+
+        // -----------------------------
+        // Filter Card
+        // -----------------------------
+        const filterCard = document.createElement("div");
+        filterCard.className = "card filter-card";
+
+        const hFilter = document.createElement("h3");
+        hFilter.textContent = "Filter";
+        filterCard.appendChild(hFilter);
+
+        const filterRow = document.createElement("div");
+        filterRow.className = "filter-row";
+
+        // Status
+        const statusSelect = document.createElement("select");
+        statusSelect.id = "filterStatus";
+        addStatusOptions(statusSelect, String(filters.status || ""));
+        statusSelect.addEventListener("change", () => {
+            this.dispatchEvent(new CustomEvent("filter-change", {
+                detail: { status: statusSelect.value },
+                bubbles: true,
+                composed: true
+            }));
+        });
+        filterRow.appendChild(makeLabeled("Status", statusSelect));
+
+        // Teilnehmer
+        const participantSelect = document.createElement("select");
+        participantSelect.id = "filterParticipant";
+        addParticipantOptions(
+            participantSelect,
+            participants,
+            String(filters.participantId || "")
+        );
+        participantSelect.addEventListener("change", () => {
+            this.dispatchEvent(new CustomEvent("filter-change", {
+                detail: { participantId: participantSelect.value },
+                bubbles: true,
+                composed: true
+            }));
+        });
+        filterRow.appendChild(makeLabeled("Teilnehmer", participantSelect));
+
+        // Tag
+        const tagSelect = document.createElement("select");
+        tagSelect.id = "filterTag";
+        addTagOptions(tagSelect, tags, String(filters.tagId || ""));
+        tagSelect.addEventListener("change", () => {
+            this.dispatchEvent(new CustomEvent("filter-change", {
+                detail: { tagId: tagSelect.value },
+                bubbles: true,
+                composed: true
+            }));
+        });
+        filterRow.appendChild(makeLabeled("Tag", tagSelect));
+
+        filterCard.appendChild(filterRow);
+        page.appendChild(filterCard);
+
+        // -----------------------------
+        // Layout: Liste + Details
+        // -----------------------------
+        const layout = document.createElement("div");
+        layout.className = "events-layout";
+
+        // -----------------------------
+        // Liste
+        // -----------------------------
+        const listCard = document.createElement("div");
+        listCard.className = "card event-list";
+
+        const hList = document.createElement("h3");
+        hList.textContent = "Events";
+        listCard.appendChild(hList);
+
+        const ul = document.createElement("ul");
+
+        if (events.length === 0) {
+            const li = document.createElement("li");
+            li.textContent = "Keine Events gefunden.";
+            ul.appendChild(li);
+        } else {
+            for (let i = 0; i < events.length; i++) {
+                const ev = events[i];
+
+                const li = document.createElement("li");
+                li.className = "event-item";
+                li.setAttribute("data-event-id", ev.id);
+
+                if (selected && Number(selected.id) === Number(ev.id)) {
+                    li.classList.add("event-item--active");
+                }
+
+                li.addEventListener("click", () => {
+                    this.dispatchEvent(new CustomEvent("select-event", {
+                        detail: { id: ev.id },
+                        bubbles: true,
+                        composed: true
+                    }));
+                });
+
+                const strong = document.createElement("strong");
+                strong.textContent = String(ev.title || "");
+                li.appendChild(strong);
+
+                li.appendChild(document.createElement("br"));
+
+                const small = document.createElement("small");
+                small.textContent = formatDateTime(ev.dateTime);
+                li.appendChild(small);
+
+                ul.appendChild(li);
+            }
+        }
+
+        listCard.appendChild(ul);
+        layout.appendChild(listCard);
+
+        // -----------------------------
+        // Details
+        // -----------------------------
+        const detailCard = document.createElement("div");
+        detailCard.className = "card event-detail";
+
+        if (!selected) {
+            const p = document.createElement("p");
+            p.textContent = "Kein Event ausgewählt.";
+            detailCard.appendChild(p);
+        } else {
+            const hDetail = document.createElement("h3");
+            hDetail.textContent = String(selected.title || "");
+            detailCard.appendChild(hDetail);
+
+            detailCard.appendChild(detailLine("Datum:", formatDateTime(selected.dateTime)));
+            detailCard.appendChild(detailLine("Ort:", String(selected.location || "")));
+            detailCard.appendChild(detailLine("Status:", String(selected.status || "")));
+
+            const pDesc = document.createElement("p");
+            pDesc.textContent = String(selected.description || "");
+            detailCard.appendChild(pDesc);
+
+            // Teilnehmer Dropdown (Checkboxen)
+            const currentIds = Array.isArray(selected.participantIds)
+                ? selected.participantIds.map(Number)
+                : [];
+
+            detailCard.appendChild(makeParticipantDropdown(participants, currentIds));
+
+            // Teilnehmer speichern
+            const saveBtn = document.createElement("button");
+            saveBtn.type = "button";
+            saveBtn.id = "btnSaveParticipants";
+            saveBtn.textContent = "Teilnehmer speichern";
+            saveBtn.addEventListener("click", () => {
+                const evId = this.getAttribute("data-selected-event-id");
+                if (!evId) return;
+
+                const ids = getCheckedParticipantIds(detailCard);
+
+                this.dispatchEvent(new CustomEvent("update-participants", {
+                    detail: { eventId: evId, participantIds: ids },
+                    bubbles: true,
+                    composed: true
+                }));
+            });
+            detailCard.appendChild(saveBtn);
+
+            // Aktionen
+            const actions = document.createElement("div");
+            actions.className = "event-detail-actions";
+
+            const editBtn = document.createElement("button");
+            editBtn.type = "button";
+            editBtn.id = "btnEditEvent";
+            editBtn.textContent = "Bearbeiten";
+            editBtn.addEventListener("click", () => {
+                this.dispatchEvent(new CustomEvent("edit-event", {
+                    detail: { id: selected.id },
+                    bubbles: true,
+                    composed: true
+                }));
+            });
+            actions.appendChild(editBtn);
+
+            const deleteBtn = document.createElement("button");
+            deleteBtn.type = "button";
+            deleteBtn.id = "btnDeleteEvent";
+            deleteBtn.textContent = "Löschen";
+            deleteBtn.addEventListener("click", () => {
+                this.dispatchEvent(new CustomEvent("delete-event", {
+                    detail: { id: selected.id },
+                    bubbles: true,
+                    composed: true
+                }));
+            });
+            actions.appendChild(deleteBtn);
+
+            detailCard.appendChild(actions);
+        }
+
+        layout.appendChild(detailCard);
+        page.appendChild(layout);
+        this.root.appendChild(page);
+    }
+}
+
+if (!customElements.get("events-view")) {
+    customElements.define("events-view", EventsView);
+}
+
+// ------------------------------------------------------------
+// Helfer-Funktion: wie bisher im Controller verwendbar
+// ------------------------------------------------------------
 export function renderEventsView(container, data) {
     clearContainer(container);
 
-    const filters = data.filters || {};
-    const tags = data.tags || [];
-    const participants = data.participants || [];
-    const events = data.events || [];
-    const selected = data.selected || null;
+    const el = document.createElement("events-view");
+    container.appendChild(el);
 
-    if (selected && selected.id !== undefined && selected.id !== null) {
-        container.setAttribute("data-selected-event-id", String(selected.id));
-    } else {
-        container.removeAttribute("data-selected-event-id");
-    }
-
-    const page = document.createElement("div");
-    page.className = "events-page";
-
-    // -----------------------------
-    // Filter Card
-    // -----------------------------
-    const filterCard = document.createElement("div");
-    filterCard.className = "card filter-card";
-
-    const hFilter = document.createElement("h3");
-    hFilter.textContent = "Filter";
-    filterCard.appendChild(hFilter);
-
-    const filterRow = document.createElement("div");
-    filterRow.className = "filter-row";
-
-    // Status
-    const statusLabel = document.createElement("label");
-    const statusText = document.createElement("span");
-    statusText.textContent = "Status";
-    statusLabel.appendChild(statusText);
-
-    const statusSelect = document.createElement("select");
-    statusSelect.id = "filterStatus";
-    addStatusOptions(statusSelect, String(filters.status || ""));
-    statusLabel.appendChild(statusSelect);
-    filterRow.appendChild(statusLabel);
-
-    // Teilnehmer
-    const participantLabel = document.createElement("label");
-    const participantText = document.createElement("span");
-    participantText.textContent = "Teilnehmer";
-    participantLabel.appendChild(participantText);
-
-    const participantSelect = document.createElement("select");
-    participantSelect.id = "filterParticipant";
-    addParticipantOptions(
-        participantSelect,
-        participants,
-        String(filters.participantId || "")
-    );
-    participantLabel.appendChild(participantSelect);
-    filterRow.appendChild(participantLabel);
-
-    // Tag
-    const tagLabel = document.createElement("label");
-    const tagText = document.createElement("span");
-    tagText.textContent = "Tag";
-    tagLabel.appendChild(tagText);
-
-    const tagSelect = document.createElement("select");
-    tagSelect.id = "filterTag";
-    addTagOptions(tagSelect, tags, String(filters.tagId || ""));
-    tagLabel.appendChild(tagSelect);
-    filterRow.appendChild(tagLabel);
-
-    filterCard.appendChild(filterRow);
-    page.appendChild(filterCard);
-
-    // -----------------------------
-    // Layout: Liste + Details
-    // -----------------------------
-    const layout = document.createElement("div");
-    layout.className = "events-layout";
-
-    // Liste
-    const listCard = document.createElement("div");
-    listCard.className = "card event-list";
-
-    const hList = document.createElement("h3");
-    hList.textContent = "Events";
-    listCard.appendChild(hList);
-
-    const ul = document.createElement("ul");
-
-    if (events.length === 0) {
-        const li = document.createElement("li");
-        li.textContent = "Keine Events gefunden.";
-        ul.appendChild(li);
-    } else {
-        for (let i = 0; i < events.length; i++) {
-            const ev = events[i];
-
-            const li = document.createElement("li");
-            li.className = "event-item";
-            li.setAttribute("data-event-id", ev.id);
-
-            // Aktives Event markieren
-            if (selected && Number(selected.id) === Number(ev.id)) {
-                li.classList.add("event-item--active");
-            }
-
-            const strong = document.createElement("strong");
-            strong.textContent = String(ev.title || "");
-            li.appendChild(strong);
-
-            li.appendChild(document.createElement("br"));
-
-            const small = document.createElement("small");
-            small.textContent = formatDateTime(ev.dateTime);
-            li.appendChild(small);
-
-            ul.appendChild(li);
-        }
-    }
-
-    listCard.appendChild(ul);
-    layout.appendChild(listCard);
-
-    // Details
-    const detailCard = document.createElement("div");
-    detailCard.className = "card event-detail";
-
-    if (!selected) {
-        const p = document.createElement("p");
-        p.textContent = "Kein Event ausgewählt.";
-        detailCard.appendChild(p);
-    } else {
-        const hDetail = document.createElement("h3");
-        hDetail.textContent = String(selected.title || "");
-        detailCard.appendChild(hDetail);
-
-        detailCard.appendChild(detailLine("Datum:", formatDateTime(selected.dateTime)));
-        detailCard.appendChild(detailLine("Ort:", String(selected.location || "")));
-        detailCard.appendChild(detailLine("Status:", String(selected.status || "")));
-
-        const pDesc = document.createElement("p");
-        pDesc.textContent = String(selected.description || "");
-        detailCard.appendChild(pDesc);
-
-        // Teilnehmer Dropdown (Checkboxen in <details>)
-        const currentIds = Array.isArray(selected.participantIds)
-            ? selected.participantIds.map(Number)
-            : [];
-
-        detailCard.appendChild(makeParticipantDropdown(participants, currentIds));
-
-        const saveRow = document.createElement("div");
-        saveRow.className = "event-detail-actions";
-
-        const saveBtn = document.createElement("button");
-        saveBtn.type = "button";
-        saveBtn.id = "btnSaveParticipants";
-        saveBtn.textContent = "Teilnehmer speichern";
-        saveRow.appendChild(saveBtn);
-
-        detailCard.appendChild(saveRow);
-
-        // Aktionen
-        const actions = document.createElement("div");
-        actions.className = "event-detail-actions";
-
-        const editBtn = document.createElement("button");
-        editBtn.type = "button";
-        editBtn.id = "btnEditEvent";
-        editBtn.textContent = "Bearbeiten";
-        actions.appendChild(editBtn);
-
-        const deleteBtn = document.createElement("button");
-        deleteBtn.type = "button";
-        deleteBtn.id = "btnDeleteEvent";
-        deleteBtn.textContent = "Löschen";
-        actions.appendChild(deleteBtn);
-
-        detailCard.appendChild(actions);
-    }
-
-    layout.appendChild(detailCard);
-    page.appendChild(layout);
-    container.appendChild(page);
+    el.setData(data);
 }
 
-// --------------------------------------------------------------------
-// bindEventsView(...)
-//
-// Verknüpft UI-Elemente mit Controller-Callbacks:
-// - Filter ändern -> onFilterChange(...)
-// - Event auswählen -> onSelectEvent(id)
-// - Bearbeiten/Löschen -> onEditEvent/onDeleteEvent(id)
-// - Teilnehmer speichern -> onUpdateParticipants(eventId, ids)
-// --------------------------------------------------------------------
+// ------------------------------------------------------------
+// bindEventsView: bleibt nutzbar
+// ------------------------------------------------------------
 export function bindEventsView(
     container,
     onFilterChange,
@@ -228,75 +300,49 @@ export function bindEventsView(
     onDeleteEvent,
     onUpdateParticipants
 ) {
-    const status = container.querySelector("#filterStatus");
-    const participant = container.querySelector("#filterParticipant");
-    const tag = container.querySelector("#filterTag");
+    const el = container.querySelector("events-view");
+    if (!el) return;
 
-    if (status) {
-        status.addEventListener("change", () =>
-            onFilterChange({ status: status.value })
-        );
-    }
-    if (participant) {
-        participant.addEventListener("change", () =>
-            onFilterChange({ participantId: participant.value })
-        );
-    }
-    if (tag) {
-        tag.addEventListener("change", () =>
-            onFilterChange({ tagId: tag.value })
-        );
-    }
+    el.addEventListener("filter-change", (e) => {
+        if (onFilterChange) onFilterChange(e.detail || {});
+    });
 
-    // Klick auf Listeneintrag -> Event auswählen
-    const items = container.querySelectorAll("[data-event-id]");
-    for (let i = 0; i < items.length; i++) {
-        items[i].addEventListener("click", () => {
-            const id = items[i].getAttribute("data-event-id");
-            if (onSelectEvent) onSelectEvent(id);
-        });
-    }
+    el.addEventListener("select-event", (e) => {
+        const id = e.detail ? e.detail.id : null;
+        if (onSelectEvent) onSelectEvent(id);
+    });
 
-    // Teilnehmer speichern (IDs aus Checkboxen lesen)
-    const saveBtn = container.querySelector("#btnSaveParticipants");
-    if (saveBtn) {
-        saveBtn.addEventListener("click", () => {
-            const evId = container.getAttribute("data-selected-event-id");
-            if (!evId) return;
+    el.addEventListener("edit-event", (e) => {
+        const id = e.detail ? e.detail.id : null;
+        if (onEditEvent) onEditEvent(id);
+    });
 
-            const ids = getCheckedParticipantIds(container);
-            if (onUpdateParticipants) onUpdateParticipants(evId, ids);
-        });
-    }
+    el.addEventListener("delete-event", (e) => {
+        const id = e.detail ? e.detail.id : null;
+        if (onDeleteEvent) onDeleteEvent(id);
+    });
 
-    // Bearbeiten
-    const editBtn = container.querySelector("#btnEditEvent");
-    if (editBtn) {
-        editBtn.addEventListener("click", () => {
-            const active = container.querySelector(".event-item--active");
-            if (!active) return;
-
-            const id = active.getAttribute("data-event-id");
-            if (onEditEvent) onEditEvent(id);
-        });
-    }
-
-    // Löschen
-    const deleteBtn = container.querySelector("#btnDeleteEvent");
-    if (deleteBtn) {
-        deleteBtn.addEventListener("click", () => {
-            const active = container.querySelector(".event-item--active");
-            if (!active) return;
-
-            const id = active.getAttribute("data-event-id");
-            if (onDeleteEvent) onDeleteEvent(id);
-        });
-    }
+    el.addEventListener("update-participants", (e) => {
+        if (!onUpdateParticipants) return;
+        const d = e.detail || {};
+        onUpdateParticipants(d.eventId, d.participantIds);
+    });
 }
 
 // --------------------------------------------------------------------
-// Helper
+// Helper (nur für diese Datei)
 // --------------------------------------------------------------------
+
+function makeLabeled(text, control) {
+    const label = document.createElement("label");
+
+    const span = document.createElement("span");
+    span.textContent = text;
+    label.appendChild(span);
+
+    label.appendChild(control);
+    return label;
+}
 
 function addStatusOptions(select, active) {
     const values = ["", "offen", "geplant", "erledigt"];
@@ -369,11 +415,7 @@ function formatDateTime(value) {
     const d = date.split("-");
     if (d.length !== 3) return s;
 
-    const yyyy = d[0];
-    const mm = d[1];
-    const dd = d[2];
-
-    return dd + "." + mm + "." + yyyy + ", " + time + " Uhr";
+    return d[2] + "." + d[1] + "." + d[0] + ", " + time + " Uhr";
 }
 
 function makeParticipantDropdown(participants, activeIds) {
@@ -424,8 +466,8 @@ function makeParticipantDropdown(participants, activeIds) {
     return wrap;
 }
 
-function getCheckedParticipantIds(container) {
-    const group = container.querySelector("#detailParticipants");
+function getCheckedParticipantIds(scopeEl) {
+    const group = scopeEl.querySelector("#detailParticipants");
     if (!group) return [];
 
     const checks = group.querySelectorAll('input[type="checkbox"][data-id]');
@@ -437,5 +479,6 @@ function getCheckedParticipantIds(container) {
             if (!isNaN(id)) ids.push(id);
         }
     }
+
     return ids;
 }

@@ -1,10 +1,12 @@
 // --------------------------------------------------------------------
 // controller.js
 //
-// Steuert die App:
-// - merkt sich, welche Seite aktiv ist (activePage)
-// - rendert Navigation, Banner und Seiteninhalt
-// - verbindet Views mit den Models (Callbacks)
+// Steuert die SPA
+// - Navigation
+// - Events (Liste/Detail/Filter, Bearbeiten, Löschen, Teilnehmer speichern)
+// - Event erstellen / bearbeiten
+// - Teilnehmer
+// - Tags
 // --------------------------------------------------------------------
 
 import { renderBannerView } from "./view/bannerView.js";
@@ -25,11 +27,10 @@ export function Controller(eventModel, participantModel, tagModel) {
 
     this.app = document.getElementById("app");
 
-    this.activePage = "events"; // aktuelle Seite
-    this.editEvent = null;      // wenn gesetzt: Formular läuft im Edit-Modus
-    this.bannerText = "";       // Text für die Banner-Leiste
+    this.activePage = "events";
+    this.editEvent = null;
+    this.bannerText = "";
 
-    // Modelle so verbinden, dass bei Änderungen neu gerendert wird
     this._wire(this.eventModel);
     this._wire(this.participantModel);
     this._wire(this.tagModel);
@@ -40,12 +41,9 @@ export function Controller(eventModel, participantModel, tagModel) {
 // --------------------------------------------------------------------
 // Model Listener
 // --------------------------------------------------------------------
-
-// Registriert Listener, damit die UI automatisch aktualisiert wird
 Controller.prototype._wire = function (model) {
     model.addListener("loaded", () => this.render());
     model.addListener("changed", () => this.render());
-
     model.addListener("banner", (text) => {
         this.bannerText = text;
         this.render();
@@ -55,11 +53,8 @@ Controller.prototype._wire = function (model) {
 // --------------------------------------------------------------------
 // Render
 // --------------------------------------------------------------------
-
-// Baut die komplette Seite neu auf (Nav, Banner, Content)
 Controller.prototype.render = function () {
 
-    // App-Container komplett leeren
     while (this.app.firstChild) {
         this.app.removeChild(this.app.firstChild);
     }
@@ -77,22 +72,16 @@ Controller.prototype.render = function () {
 
     this.app.appendChild(page);
 
-    // -----------------------------
     // Navigation
-    // -----------------------------
     renderNavView(navArea, this.activePage);
-
     bindNavView(navArea, (pageId) => {
-        // Seite wechseln + Edit/Banner zurücksetzen
         this.activePage = pageId;
         this.editEvent = null;
         this.bannerText = "";
         this.render();
     });
 
-    // -----------------------------
     // Banner
-    // -----------------------------
     renderBannerView(bannerArea, this.bannerText);
 
     // ------------------------------------------------------------
@@ -111,23 +100,28 @@ Controller.prototype.render = function () {
         bindEventsView(
             content,
 
-            // Filter geändert
+            // Filter
             (filters) => this.eventModel.setFilters(filters),
 
-            // Event in der Liste gewählt
+            // Select
             (id) => this.eventModel.selectEvent(id),
 
-            // Bearbeiten: merkt sich Event und wechselt ins Formular
+            // Edit
             (id) => {
                 this.editEvent = this.eventModel.getSelectedEvent();
                 this.activePage = "newEvent";
                 this.render();
             },
 
-            // Löschen: mit Sicherheitsabfrage
+            // Delete
             (id) => {
                 const ok = confirm("Event wirklich löschen?");
                 if (ok) this.eventModel.deleteEvent(id);
+            },
+
+            // Teilnehmer im Detail speichern
+            (eventId, participantIds) => {
+                this.eventModel.updateParticipants(eventId, participantIds);
             }
         );
     }
@@ -146,7 +140,6 @@ Controller.prototype.render = function () {
         bindEventFormView(
             content,
 
-            // Submit: entscheidet zwischen add und update
             (formData) => {
                 if (formData.id) {
                     this.eventModel.updateEvent(formData);
@@ -154,13 +147,11 @@ Controller.prototype.render = function () {
                     this.eventModel.addEvent(formData);
                 }
 
-                // zurück zur Liste
                 this.editEvent = null;
                 this.activePage = "events";
                 this.render();
             },
 
-            // Edit abbrechen: zurück zur Liste
             () => {
                 this.editEvent = null;
                 this.activePage = "events";
@@ -168,7 +159,6 @@ Controller.prototype.render = function () {
             }
         );
 
-        // Falls Edit-Modus: Formular mit Daten füllen
         if (this.editEvent) {
             startEdit(content, this.editEvent);
         }
@@ -186,18 +176,15 @@ Controller.prototype.render = function () {
         bindParticipantView(
             content,
 
-            // Hinzufügen
+            // Add
             (data) => this.participantModel.addParticipant(data),
 
-            // Löschen (mit Prüfung ob Teilnehmer noch verwendet wird)
+            // Delete (nur wenn nicht verwendet)
             (id) => {
                 const pid = Number(id);
 
-                // Prüfen, ob pid in irgendeinem Event in participantIds vorkommt
                 const used = this.eventModel.events.some((ev) => {
-                    const arr = Array.isArray(ev.participantIds)
-                        ? ev.participantIds
-                        : [];
+                    const arr = Array.isArray(ev.participantIds) ? ev.participantIds : [];
                     return arr.map(Number).includes(pid);
                 });
 
@@ -227,18 +214,15 @@ Controller.prototype.render = function () {
         bindTagView(
             content,
 
-            // Hinzufügen
+            // Add
             (data) => this.tagModel.addTag(data),
 
-            // Löschen (mit Prüfung ob Tag noch verwendet wird)
+            // Delete (nur wenn nicht verwendet)
             (id) => {
                 const tid = Number(id);
 
-                // Prüfen, ob tid in irgendeinem Event in tagIds vorkommt
                 const used = this.eventModel.events.some((ev) => {
-                    const arr = Array.isArray(ev.tagIds)
-                        ? ev.tagIds
-                        : [];
+                    const arr = Array.isArray(ev.tagIds) ? ev.tagIds : [];
                     return arr.map(Number).includes(tid);
                 });
 

@@ -1,63 +1,93 @@
 // --------------------------------------------------------------------
 // navView.js
-//
-// Kleine View für die Navigation oben.
-// Sie rendert Buttons für die Seiten und markiert die aktive Seite.
-// Zusätzlich werden Click-Handler gebunden, damit der Controller
-// die Navigation steuern kann.
+// Navigation (Buttons)
+// - Web Component + ShadowRoot
+// - lädt globales CSS in den ShadowRoot
 // --------------------------------------------------------------------
+
+function clearContainer(container) {
+    while (container.firstChild) container.removeChild(container.firstChild);
+}
+
+export class NavView extends HTMLElement {
+    constructor() {
+        super();
+
+        this.attachShadow({ mode: "open" });
+
+        // Globales CSS im Shadow DOM verfügbar machen
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = "./styles/main.css";
+        this.shadowRoot.appendChild(link);
+
+        this.activePage = "events";
+
+        this.root = document.createElement("div");
+        this.shadowRoot.appendChild(this.root);
+    }
+
+    setActive(pageId) {
+        this.activePage = String(pageId || "events");
+        this.render();
+    }
+
+    render() {
+        // innerHTML ist hier praktisch (wie im Unterricht)
+        this.root.innerHTML = `
+            <nav class="nav">
+                <button type="button" class="nav__btn" data-nav="events">Events</button>
+                <button type="button" class="nav__btn" data-nav="newEvent">Event erstellen</button>
+                <button type="button" class="nav__btn" data-nav="participants">Teilnehmer</button>
+                <button type="button" class="nav__btn" data-nav="tags">Tags</button>
+            </nav>
+        `;
+
+        const buttons = this.root.querySelectorAll("[data-nav]");
+
+        for (let i = 0; i < buttons.length; i++) {
+            const id = buttons[i].getAttribute("data-nav");
+
+            if (String(id) === String(this.activePage)) {
+                buttons[i].classList.add("nav__btn--active");
+            } else {
+                buttons[i].classList.remove("nav__btn--active");
+            }
+
+            buttons[i].addEventListener("click", () => {
+                const target = buttons[i].getAttribute("data-nav");
+
+                this.dispatchEvent(
+                    new CustomEvent("navigate", {
+                        detail: { pageId: target },
+                        bubbles: true,
+                        composed: true
+                    })
+                );
+            });
+        }
+    }
+}
+
+if (!customElements.get("nav-view")) {
+    customElements.define("nav-view", NavView);
+}
 
 export function renderNavView(container, activePage) {
-    // Container leeren, damit die Navigation sauber neu gerendert wird
-    while (container.firstChild)
-        container.removeChild(container.firstChild);
+    clearContainer(container);
 
-    const nav = document.createElement("nav");
-    nav.className = "nav";
+    const el = document.createElement("nav-view");
+    container.appendChild(el);
 
-    // Buttons erzeugen (activePage entscheidet, welcher aktiv aussieht)
-    nav.appendChild(makeNavButton("Events", "events", activePage));
-    nav.appendChild(makeNavButton("Event erstellen", "newEvent", activePage));
-    nav.appendChild(makeNavButton("Teilnehmer", "participants", activePage));
-    nav.appendChild(makeNavButton("Tags", "tags", activePage));
-
-    container.appendChild(nav);
+    el.setActive(activePage);
 }
 
-// --------------------------------------------------------------------
-// bindNavView(container, onNavigate)
-//
-// Verknüpft alle Nav-Buttons mit einem Callback.
-// Der Callback bekommt die Zielseite (data-nav) übergeben.
-// --------------------------------------------------------------------
 export function bindNavView(container, onNavigate) {
-    const buttons = container.querySelectorAll("[data-nav]");
+    const el = container.querySelector("nav-view");
+    if (!el) return;
 
-    for (let i = 0; i < buttons.length; i++) {
-        buttons[i].addEventListener("click", () => {
-            const target = buttons[i].getAttribute("data-nav");
-            if (onNavigate) onNavigate(target);
-        });
-    }
-}
-
-// Erzeugt einen einzelnen Nav-Button und markiert ihn ggf. als aktiv
-function makeNavButton(text, navId, activePage) {
-    const btn = document.createElement("button");
-
-    // Wichtig bei Buttons in/nahe Forms: sonst könnte es submitten
-    btn.type = "button";
-
-    btn.textContent = text;
-
-    // data-nav wird später in bindNavView ausgelesen
-    btn.classList.add("nav__btn");
-    btn.setAttribute("data-nav", navId);
-
-    // Aktive Seite optisch markieren
-    if (String(activePage) === String(navId)) {
-        btn.classList.add("nav__btn--active");
-    }
-
-    return btn;
+    el.addEventListener("navigate", (e) => {
+        const pageId = e.detail ? e.detail.pageId : null;
+        if (onNavigate) onNavigate(pageId);
+    });
 }
